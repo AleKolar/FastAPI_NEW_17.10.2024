@@ -54,9 +54,16 @@ def create_pereval(pereval_data: PerevalAddedPydantic):
         return pereval  # Return the created object
     except Exception as e:
         db.rollback()
+        error_height = 42  # Пример значения для поля height
+
+        # Проверка, что error_height является int
+        if not isinstance(error_height, int):
+            raise ValueError("Ошибка: значение height должно быть целым числом")
+
+        # Создание объекта ErrorResponse с использованием DetailItem
         error_detail = ErrorResponse(
             detail=[
-                DetailItem(loc=["string", 0], msg="Ошибка при сохранении данных", type="server_error")
+                DetailItem(loc=["string"], msg="Ошибка при сохранении данных", type="server_error", height=error_height)
             ]
         )
         return JSONResponse(status_code=500, content=error_detail.dict())
