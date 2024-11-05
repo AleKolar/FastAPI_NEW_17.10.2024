@@ -5,11 +5,11 @@ from pydantic import BaseModel
 from typing import List
 
 from sqlalchemy.ext.asyncio import async_session
-from starlette.responses import HTMLResponse
+from starlette.responses import HTMLResponse, JSONResponse
 
 import database
 from database import Session
-from pereval.models import PerevalAdded, User, Coords, Level, Image
+from pereval.models import PerevalAdded, User, Coords, Level, Image, PerevalAddedPydantic, ErrorResponse, DetailItem
 
 app = FastAPI()
 
@@ -20,8 +20,8 @@ app = FastAPI()
 # async def root():
 #     return {"message": "Hello World"}
 
-@app.post("/Pereval", response_model=PerevalAdded)  # Указываем response_model для возврата созданного объекта
-def create_pereval(pereval_data: PerevalAdded):
+@app.post("/Pereval", response_model=None)
+def create_pereval(pereval_data: PerevalAddedPydantic):
     db = Session()
     try:
         # Создаем новые объекты на основе полученных данных
@@ -51,19 +51,29 @@ def create_pereval(pereval_data: PerevalAdded):
         db.add(pereval)
         db.commit()
 
-        return pereval  # Возвращаем созданный объект
+        return pereval  # Return the created object
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail="Ошибка при сохранении данных")
+        error_detail = ErrorResponse(
+            detail=[
+                DetailItem(loc=["string", 0], msg="Ошибка при сохранении данных", type="server_error")
+            ]
+        )
+        return JSONResponse(status_code=500, content=error_detail.dict())
     finally:
         db.close()
 
-@app.get("/pereval_id/{pereval_id}", response_model=PerevalAdded)
+@app.get("/pereval_id/{pereval_id}", response_model=None)
 async def get_pereval_by_id(pereval_id: int):
     async with async_session() as session:
         pereval = await session.get(database.pereval, pereval_id)
         if pereval is None:
-            raise HTTPException(status_code=404, detail="Объект не найден")
+            error_detail = ErrorResponse(
+                detail=[
+                    DetailItem(loc=["string", 0], msg="Объект не найден", type="not_found")
+                ]
+            )
+            return JSONResponse(status_code=404, content=error_detail.dict())
         return pereval
 
 def custom_openapi():
@@ -91,5 +101,9 @@ async def redoc_html():
 
 if __name__ == "__main__":
     import uvicorn
+    import webbrowser
+
+    # Открываем браузер с URL для документации при запуске
+    webbrowser.open('http://127.0.0.1:8000/docs')
 
     uvicorn.run(app, host="127.0.0.1", port=8000)
