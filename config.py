@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     DB_USER: str
     DB_PASSWORD: str
 
+    class Config:
+        env_file = ".env"  # Указываем файл .env для загрузки переменных окружения
+
 settings = Settings()
 
 def get_db_url():
