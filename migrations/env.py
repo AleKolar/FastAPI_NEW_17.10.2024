@@ -4,7 +4,7 @@ from alembic import context
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
-from database import DATABASE_URL, Base
+from database import DATABASE_URL
 from pereval.models import *
 
 # this is the Alembic Config object, which provides

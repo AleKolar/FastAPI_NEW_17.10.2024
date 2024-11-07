@@ -1,18 +1,19 @@
-from fastapi import FastAPI
-from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, func
+from sqlalchemy import Column, String, Integer, ForeignKey
 from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declarative_base
 
 
-from pydantic import BaseModel
-from typing import List, Union
-from datetime import datetime
+from pydantic import BaseModel, conint
+from typing import List, Union, Optional
 
-app = FastAPI()
+from database import Base
+
 
 class ImagePydantic(BaseModel):
     data: str
     title: str
+
+    class Config:
+        from_attributes = True
 
 class LevelPydantic(BaseModel):
     winter: str
@@ -32,49 +33,37 @@ class UserPydantic(BaseModel):
     otc: str
     phone: str
 
-
-# class PerevalAddedResponse(BaseModel):
-#     beauty_title: str
-#     title: str
-#     other_titles: str
-#     connect: str
-#     add_time: str
-#     user: dict
-#     coords: dict
-#     level: dict
-#     images: list
-
-class PerevalAddedResponse(BaseModel):
-    beauty_title: str
-    title: str
-    other_titles: str
-    connect: str
-    add_time: datetime = datetime.now()
-    user: UserPydantic
-    coords: CoordsPydantic
-    level: LevelPydantic
-    images: List[ImagePydantic]
-
 class PerevalAddedPydantic(BaseModel):
     beauty_title: str
     title: str
     other_titles: str
     connect: str
-    add_time: str = str(datetime.now())
     user: UserPydantic
     coords: CoordsPydantic
     level: LevelPydantic
     images: List[ImagePydantic]
 
 class DetailItem(BaseModel):
-    loc: List[str]
+    loc: Optional[Union[str, int]]
     msg: str
-    type: Union[str, int]
+    type: str
+
+    class Config:
+        schema_extra = {
+            "properties": {
+                "loc": {
+                    "title": "Location",
+                    "description": "Location description"
+                }
+            }
+        }
 
 class ErrorResponse(BaseModel):
     detail: List[DetailItem]
+    error_code: int
+    additional_message: str
+    more_details: str
 
-Base = declarative_base()
 
 
 class User(Base):
@@ -86,36 +75,26 @@ class User(Base):
     otc = Column(String)
     phone = Column(String)
 
-
 class Coords(Base):
     __tablename__ = 'coords'
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True)
     latitude = Column(String)
     longitude = Column(String)
     height = Column(Integer)
 
-    pereval = relationship("PerevalAdded", backref="coords")
-
-
 class Level(Base):
     __tablename__ = 'level'
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True)
     winter = Column(String)
     summer = Column(String)
     autumn = Column(String)
     spring = Column(String)
 
-    pereval = relationship("PerevalAdded", backref="level")
-
-
 class Image(Base):
     __tablename__ = 'image'
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True)
     data = Column(String)
     title = Column(String)
-
-    pereval = relationship("PerevalAdded", backref="images")
-
 
 class PerevalAdded(Base):
     __tablename__ = 'pereval'
@@ -124,7 +103,6 @@ class PerevalAdded(Base):
     title = Column(String)
     other_titles = Column(String)
     connect = Column(String)
-    add_time = Column(DateTime, server_default=func.now())
 
     user_id = Column(Integer, ForeignKey('user.id'))
     user = relationship("User")
@@ -136,4 +114,4 @@ class PerevalAdded(Base):
     level = relationship("Level")
 
     images = relationship("Image", backref="pereval")
-
+    image_id = Column(Integer, ForeignKey('image.id'))

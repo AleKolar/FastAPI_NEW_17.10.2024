@@ -10,60 +10,52 @@ from starlette.responses import HTMLResponse, JSONResponse
 import database
 from database import Session
 from pereval.models import PerevalAdded, User, Coords, Level, Image, PerevalAddedPydantic, ErrorResponse, DetailItem
+from pereval.serializer import image_pydantic_to_sqlalchemy, perevaladded_pydantic_to_sqlalchemy, \
+    level_pydantic_to_sqlalchemy, user_pydantic_to_sqlalchemy, coords_pydantic_to_sqlalchemy
 
 app = FastAPI()
 
 
 
 
-# @app.get("/")
-# async def root():
-#     return {"message": "Hello World"}
+@app.get("/")
+async def root():
+    return {"message": "Hello World"}
+
 
 @app.post("/Pereval", response_model=None)
-def create_pereval(pereval_data: PerevalAddedPydantic):
+async def create_pereval(pereval_data: PerevalAddedPydantic):
     db = Session()
     try:
-        # Создаем новые объекты на основе полученных данных
-        user = User(**pereval_data.user.dict())
-        coords = Coords(**pereval_data.coords.dict())
-        level = Level(**pereval_data.level.dict())
+        user = user_pydantic_to_sqlalchemy(pereval_data.user)
+        coords = coords_pydantic_to_sqlalchemy(pereval_data.coords)
+        level = level_pydantic_to_sqlalchemy(pereval_data.level)
 
         db.add(user)
         db.add(coords)
         db.add(level)
 
-        for image_data in pereval_data.images:
-            image = Image(**image_data.dict())
+        images = [image_pydantic_to_sqlalchemy(image_data) for image_data in pereval_data.images]
+
+        for image in images:
             db.add(image)
 
-        pereval = PerevalAdded(
-            beauty_title=pereval_data.beauty_title,
-            title=pereval_data.title,
-            other_titles=pereval_data.other_titles,
-            connect=pereval_data.connect,
-            add_time=pereval_data.add_time,
-            user=user,
-            coords=coords,
-            level=level,
-            images=pereval_data.images
-        )
+        pereval = perevaladded_pydantic_to_sqlalchemy(pereval_data)
+
         db.add(pereval)
         db.commit()
 
-        return pereval  # Return the created object
+        return pereval
     except Exception as e:
         db.rollback()
-        error_height = 42  # Пример значения для поля height
+        error_height = 42  # Example value for the 'height' field
 
-        # Проверка, что error_height является int
         if not isinstance(error_height, int):
-            raise ValueError("Ошибка: значение height должно быть целым числом")
+            raise ValueError("Error: the 'height' value must be an integer")
 
-        # Создание объекта ErrorResponse с использованием DetailItem
         error_detail = ErrorResponse(
             detail=[
-                DetailItem(loc=["string"], msg="Ошибка при сохранении данных", type="server_error", height=error_height)
+                DetailItem(loc="string", msg="Error while saving data", type="server_error", height=error_height)
             ]
         )
         return JSONResponse(status_code=500, content=error_detail.dict())
@@ -87,7 +79,7 @@ def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
     openapi_schema = get_openapi(
-        title="Your Project Name",
+        title="FastAPI_Project",
         version="1.0.0",
         description="This is a fantastic project",
         routes=app.routes,
