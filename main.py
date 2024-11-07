@@ -24,7 +24,7 @@ async def root():
 
 
 @app.post("/Pereval", response_model=None)
-def create_pereval(pereval_data: PerevalAddedPydantic):
+async  def create_pereval(pereval_data: PerevalAddedPydantic):
     db = Session()
     try:
         user = user_pydantic_to_sqlalchemy(pereval_data.user)
@@ -43,7 +43,7 @@ def create_pereval(pereval_data: PerevalAddedPydantic):
         pereval = perevaladded_pydantic_to_sqlalchemy(pereval_data)
 
         db.add(pereval)
-        db.commit()
+        await db.commit()
 
         return pereval
     except Exception as e:
@@ -60,7 +60,7 @@ def create_pereval(pereval_data: PerevalAddedPydantic):
         )
         return JSONResponse(status_code=500, content=error_detail.dict())
     finally:
-        db.close()
+        await db.close()
 
 @app.get("/pereval_id/{pereval_id}", response_model=None)
 async def get_pereval_by_id(pereval_id: int):
