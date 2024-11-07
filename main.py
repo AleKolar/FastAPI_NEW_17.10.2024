@@ -24,7 +24,7 @@ async def root():
 
 
 @app.post("/Pereval", response_model=None)
-async def create_pereval(pereval_data: PerevalAddedPydantic):
+def create_pereval(pereval_data: PerevalAddedPydantic):
     db = Session()
     try:
         user = user_pydantic_to_sqlalchemy(pereval_data.user)
@@ -48,7 +48,7 @@ async def create_pereval(pereval_data: PerevalAddedPydantic):
         return pereval
     except Exception as e:
         db.rollback()
-        error_height = 42  # Example value for the 'height' field
+        error_height = 42
 
         if not isinstance(error_height, int):
             raise ValueError("Error: the 'height' value must be an integer")
