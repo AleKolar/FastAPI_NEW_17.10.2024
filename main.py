@@ -1,22 +1,25 @@
+import logging
+from typing import List
+
 from fastapi import FastAPI, HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel
-from typing import List
+from sqlalchemy import select
 
-from sqlalchemy.ext.asyncio import async_session
+from sqlalchemy.ext.asyncio import async_session, AsyncSession
+from sqlalchemy.orm import sessionmaker, selectinload, joinedload
 from starlette.responses import HTMLResponse, JSONResponse
+
 
 import database
 from database import Session
-from pereval.models import PerevalAdded, User, Coords, Level, Image, PerevalAddedPydantic, ErrorResponse, DetailItem
+from pereval.models import PerevalAdded, User, Coords, Level, Image, PerevalAddedPydantic, ErrorResponse, DetailItem, \
+    UserPydantic, CoordsPydantic, LevelPydantic, ImagePydantic
 from pereval.serializer import image_pydantic_to_sqlalchemy, perevaladded_pydantic_to_sqlalchemy, \
     level_pydantic_to_sqlalchemy, user_pydantic_to_sqlalchemy, coords_pydantic_to_sqlalchemy
 
 app = FastAPI()
-
-
-
 
 @app.get("/")
 async def root():
@@ -24,7 +27,7 @@ async def root():
 
 
 @app.post("/Pereval", response_model=None)
-async  def create_pereval(pereval_data: PerevalAddedPydantic):
+async def create_pereval(pereval_data: PerevalAddedPydantic):
     db = Session()
     try:
         user = user_pydantic_to_sqlalchemy(pereval_data.user)
@@ -47,33 +50,81 @@ async  def create_pereval(pereval_data: PerevalAddedPydantic):
 
         return pereval
     except Exception as e:
-        db.rollback()
-        error_height = 42
-
-        if not isinstance(error_height, int):
-            raise ValueError("Error: the 'height' value must be an integer")
-
-        error_detail = ErrorResponse(
-            detail=[
-                DetailItem(loc="string", msg="Error while saving data", type="server_error", height=error_height)
-            ]
-        )
-        return JSONResponse(status_code=500, content=error_detail.dict())
+        handle_db_error(db)
+        return JSONResponse(status_code=500, content=ErrorResponse.dict())
     finally:
         await db.close()
 
-@app.get("/pereval_id/{pereval_id}", response_model=None)
-async def get_pereval_by_id(pereval_id: int):
-    async with async_session() as session:
-        pereval = await session.get(database.pereval, pereval_id)
-        if pereval is None:
-            error_detail = ErrorResponse(
-                detail=[
-                    DetailItem(loc=["string", 0], msg="Объект не найден", type="not_found")
-                ]
+def handle_db_error(db):
+    db.rollback()
+    error_height = 42
+
+    if not isinstance(error_height, int):
+        raise ValueError("Error: the 'height' value must be an integer")
+
+    error_detail = ErrorResponse(
+        detail=[
+            DetailItem(loc="string", msg="Error while saving data", type="server_error", height=error_height)
+        ]
+    )
+
+
+class PerevalResponse(BaseModel):
+    id: int
+    beauty_title: str
+    title: str
+    other_titles: str
+    connect: str
+    user: UserPydantic
+    coords: CoordsPydantic
+    level: LevelPydantic
+    images: List[ImagePydantic]
+
+Session: sessionmaker = sessionmaker(bind=database.engine, class_=AsyncSession)
+
+logger = logging.getLogger(__name__)
+
+@app.get("/pereval_id/{pereval_id}", response_model=PerevalResponse)
+async def get_pereval_by_id(pereval_id: int) -> PerevalResponse:
+    async with Session() as db:
+        pereval = await db.execute(
+            select(PerevalAdded)
+            .options(
+                selectinload(PerevalAdded.user),
+                selectinload(PerevalAdded.coords),
+                selectinload(PerevalAdded.level),
+                selectinload(PerevalAdded.images)
             )
-            return JSONResponse(status_code=404, content=error_detail.dict())
-        return pereval
+            .filter(PerevalAdded.id == pereval_id)
+        )
+        result = pereval.scalars().first()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Pereval with this ID not found")
+
+        logger.debug(f"Retrieved PerevalAdded object with ID: {result.id}")
+
+        images_data = []
+        if result.images:
+            images_data = [ImagePydantic(data=image_data['data'], title=image_data['title']) for image_data in result.images]
+
+        logger.debug(f"Constructed images data: {images_data}")
+
+        return PerevalResponse(
+            id=result.id,
+            beauty_title=result.beauty_title,
+            title=result.title,
+            other_titles=result.other_titles,
+            connect=result.connect,
+            user=UserPydantic(email=result.user.email, fam=result.user.fam, name=result.user.name, otc=result.user.otc, phone=result.user.phone),
+            coords=CoordsPydantic(latitude=result.coords.latitude, longitude=result.coords.longitude, height=result.coords.height),
+            level=LevelPydantic(winter=result.level.winter, summer=result.level.summer, autumn=result.level.autumn, spring=result.level.spring),
+            images=images_data
+        )
+
+
+
+
 
 def custom_openapi():
     if app.openapi_schema:

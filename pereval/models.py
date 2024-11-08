@@ -2,7 +2,7 @@ from sqlalchemy import Column, String, Integer, ForeignKey
 from sqlalchemy.orm import relationship
 
 
-from pydantic import BaseModel, conint
+from pydantic import BaseModel, conint, Field
 from typing import List, Union, Optional
 
 from database import Base
@@ -43,27 +43,16 @@ class PerevalAddedPydantic(BaseModel):
     level: LevelPydantic
     images: List[ImagePydantic]
 
+
 class DetailItem(BaseModel):
-    loc: Optional[Union[str, int]]
+    loc: str
     msg: str
     type: str
 
-    class Config:
-        schema_extra = {
-            "properties": {
-                "loc": {
-                    "title": "Location",
-                    "description": "Location description"
-                }
-            }
-        }
-
 class ErrorResponse(BaseModel):
-    detail: List[DetailItem]
-    error_code: int
-    additional_message: str
-    more_details: str
-
+    error_code: str = Field(..., description="Error code")
+    additional_message: str = Field(..., description="Additional error message")
+    more_details: str = Field(..., description="More details about the error")
 
 
 class User(Base):
